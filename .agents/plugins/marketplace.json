@@ -1,0 +1,20 @@
+{
+  "name": "gsh-code-review",
+  "interface": {
+    "displayName": "GSH Code Review"
+  },
+  "plugins": [
+    {
+      "name": "codex-code-review-plugin",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

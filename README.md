@@ -14,6 +14,7 @@ The project is conceptually inspired by Anthropic Claude Code's official code-re
 - Independent reviewer prompt files for guideline, bug, security, history, regression, minimality, and confidence scoring passes.
 - A portable shell wrapper at `scripts/codex-review` that gathers repository context and prints a ready-to-use Codex prompt.
 - Default review configuration at `config/default-review.yml`.
+- A Codex marketplace catalog at `.agents/plugins/marketplace.json` for CLI and app installation.
 
 ## What Is Different For Codex
 
@@ -29,25 +30,84 @@ Claude Code's plugin model can use Claude-specific agent definitions. This proje
 
 Install and enable the plugin in Codex so the bundled `code-review` skill is available. Enabled skills appear in the Codex slash command list, so the skill can be invoked as `/code-review`.
 
-Run directly from the repository:
+### Install The Codex Plugin
+
+Add this repository as a Codex marketplace source, then install the plugin from that marketplace:
+
+```bash
+codex plugin marketplace add gsh123china/code-review_plugin_for_codex --ref main
+codex plugin list --available --marketplace gsh-code-review
+codex plugin add codex-code-review-plugin@gsh-code-review
+```
+
+Start a new Codex thread after installing. The plugin's marketplace name is `gsh-code-review`, and the plugin id is `codex-code-review-plugin`.
+
+If you are developing from a local checkout, add the local repository path instead:
+
+```bash
+git clone https://github.com/gsh123china/code-review_plugin_for_codex.git /absolute/path/to/code-review_plugin_for_codex
+codex plugin marketplace add /absolute/path/to/code-review_plugin_for_codex
+codex plugin add codex-code-review-plugin@gsh-code-review
+```
+
+You can also open the plugin browser with `/plugins`, choose the **GSH Code Review** marketplace, and install **Codex Code Review** from there.
+
+### Optional Shell Command
+
+The Codex plugin installation makes the skill available in Codex. If you also want a `codex-review` shell command on `PATH`, install the wrapper separately from a cloned checkout:
 
 ```bash
 ./scripts/codex-review --help
-```
-
-Or install a `codex-review` command into `~/.local/bin`:
-
-```bash
 ./scripts/install.sh
 ```
 
-To install somewhere else:
+To install the wrapper somewhere else:
 
 ```bash
 ./scripts/install.sh --prefix "$HOME/bin"
 ```
 
 The installer symlinks by default, falls back to copying if symlinks are unavailable, and refuses to replace an existing command unless `--force` is provided.
+
+## Updating
+
+For the GitHub marketplace source, refresh the marketplace snapshot and reinstall the plugin:
+
+```bash
+codex plugin marketplace upgrade gsh-code-review
+codex plugin add codex-code-review-plugin@gsh-code-review
+```
+
+For a local checkout, update the checkout first, then reinstall the plugin from the configured marketplace:
+
+```bash
+git -C /absolute/path/to/code-review_plugin_for_codex pull --ff-only
+codex plugin add codex-code-review-plugin@gsh-code-review
+```
+
+Start a new Codex thread after updating so Codex reloads the plugin bundle. If you installed the optional shell command by symlink, it follows the checkout automatically. If you installed it with `--copy`, rerun `./scripts/install.sh --force` from the updated checkout.
+
+Maintainers should bump `.codex-plugin/plugin.json`'s `version` when publishing plugin changes so Codex installs a distinct updated bundle.
+
+## Uninstalling
+
+Remove the installed plugin:
+
+```bash
+codex plugin remove codex-code-review-plugin@gsh-code-review
+```
+
+If you no longer want this marketplace source in Codex, remove it as well:
+
+```bash
+codex plugin marketplace remove gsh-code-review
+```
+
+If you installed the optional shell command, remove the installed command from the prefix you used:
+
+```bash
+rm -f "$HOME/.local/bin/codex-review"
+```
 
 ## Usage
 
