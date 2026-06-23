@@ -36,9 +36,11 @@ Add this repository as a Codex marketplace source, then install the plugin from 
 
 ```bash
 codex plugin marketplace add gsh123china/code-review_plugin_for_codex --ref main
-codex plugin list --available --marketplace gsh-code-review
+codex plugin list --json --available --marketplace gsh-code-review
 codex plugin add codex-code-review-plugin@gsh-code-review
 ```
+
+In current Codex CLI versions, `--available` is only supported with `--json`. To list installed plugins only, omit `--available`.
 
 Start a new Codex thread after installing. The plugin's marketplace name is `gsh-code-review`, and the plugin id is `codex-code-review-plugin`.
 
