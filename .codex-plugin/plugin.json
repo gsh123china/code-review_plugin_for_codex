@@ -1,6 +1,6 @@
 {
   "name": "codex-code-review-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generic Codex-oriented code review prompts and command wrappers for high-signal pull request and diff review.",
   "author": {
     "name": "gsh"

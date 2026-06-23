@@ -9,6 +9,7 @@ The project is conceptually inspired by Anthropic Claude Code's official code-re
 ## What It Provides
 
 - A Codex plugin manifest at `.codex-plugin/plugin.json`.
+- A Codex slash command at `commands/code-review.md` for `/code-review`.
 - A reusable Codex skill at `skills/code-review/SKILL.md`.
 - A self-contained review prompt at `prompts/code-review.md`.
 - Independent reviewer prompt files for guideline, bug, security, history, regression, minimality, and confidence scoring passes.
@@ -28,7 +29,7 @@ Claude Code's plugin model can use Claude-specific agent definitions. This proje
 
 ## Installation
 
-Install and enable the plugin in Codex so the bundled `code-review` skill is available. Enabled skills appear in the Codex slash command list, so the skill can be invoked as `/code-review`.
+Install and enable the plugin in Codex so the bundled `/code-review` slash command and `code-review` skill are available.
 
 ### Install The Codex Plugin
 
@@ -56,7 +57,7 @@ You can also open the plugin browser with `/plugins`, choose the **GSH Code Revi
 
 ### Optional Shell Command
 
-The Codex plugin installation makes the skill available in Codex. If you also want a `codex-review` shell command on `PATH`, install the wrapper separately from a cloned checkout:
+The Codex plugin installation makes `/code-review` and the `code-review` skill available in Codex. If you also want a `codex-review` shell command on `PATH`, install the wrapper separately from a cloned checkout:
 
 ```bash
 ./scripts/codex-review --help
@@ -117,7 +118,7 @@ rm -f "$HOME/.local/bin/codex-review"
 
 After the plugin is installed and enabled, start a new Codex thread and type `/code-review`.
 
-The slash invocation mirrors Anthropic Claude Code's `commands/code-review.md` style, but uses Codex's supported skill model:
+The slash invocation is provided by this plugin's `commands/code-review.md` file:
 
 ```text
 /code-review
@@ -128,9 +129,9 @@ The slash invocation mirrors Anthropic Claude Code's `commands/code-review.md` s
 /code-review --threshold 90
 ```
 
-The skill instructions tell Codex to translate those arguments to the same `scripts/codex-review` flags, run the wrapper, then follow the generated review prompt. If no target is provided, the wrapper auto-detects a local diff or current branch PR when possible.
+The command tells Codex to translate those arguments to the same `scripts/codex-review` flags, run the bundled wrapper, then follow the generated review prompt. If no target is provided, the wrapper auto-detects a local diff or current branch PR when possible.
 
-You can also explicitly mention the skill as `$code-review` if you prefer Codex's skill mention syntax.
+You can also explicitly mention the skill as `$code-review` if you prefer Codex's skill mention syntax or the current Codex surface does not show slash commands.
 
 ### Shell Wrapper
 

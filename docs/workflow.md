@@ -2,7 +2,7 @@
 
 ## Codex Slash Workflow
 
-After the plugin is installed and enabled in Codex, invoke the bundled skill from the composer:
+After the plugin is installed and enabled in Codex, invoke the bundled slash command from the composer:
 
 ```text
 /code-review
@@ -12,7 +12,7 @@ After the plugin is installed and enabled in Codex, invoke the bundled skill fro
 /code-review --pr 123 --comment
 ```
 
-This is the Codex equivalent of a Claude Code `commands/code-review.md` entry. The slash invocation activates the `code-review` skill, maps the supplied arguments to `scripts/codex-review`, and then follows the generated prompt.
+The slash invocation is provided by `commands/code-review.md`. It uses the `code-review` skill as the authoritative workflow, maps the supplied arguments to `scripts/codex-review`, and then follows the generated prompt.
 
 ## Typical Local Workflow
 

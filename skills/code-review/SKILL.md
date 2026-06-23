@@ -9,7 +9,7 @@ Use this skill to review only the current change. The review must focus on actio
 
 ## Slash Command Invocation
 
-When this plugin is installed and enabled, the `code-review` skill can be invoked from Codex's slash command list as:
+This plugin ships a Codex slash command at `commands/code-review.md`. When the plugin is installed and enabled, invoke the command as:
 
 ```text
 /code-review
@@ -20,13 +20,15 @@ When this plugin is installed and enabled, the `code-review` skill can be invoke
 /code-review --threshold 90
 ```
 
-Treat arguments after `/code-review` as review target options and translate them to the same `scripts/codex-review` flags. This mirrors the Claude Code `commands/code-review.md` style while using Codex's supported skill invocation model.
+The slash command uses this skill as the authoritative workflow. Treat arguments after `/code-review` as review target options and translate them to the same `scripts/codex-review` flags.
 
 If no explicit target is provided, run `scripts/codex-review` and let the wrapper detect the local diff or current branch PR.
 
+If the slash command is not available in the current Codex surface, explicitly mention this skill as `$code-review`.
+
 ## Preferred Workflow
 
-1. Run the repository script to collect context and print the complete review prompt:
+1. Run this plugin's bundled wrapper from the plugin root, or invoke it by absolute path, to collect context and print the complete review prompt:
 
 ```bash
 scripts/codex-review
@@ -44,7 +46,7 @@ scripts/codex-review --threshold 90
 
 2. Follow the generated prompt exactly. It contains the changed files, diff, repository instruction files, PR metadata when available, and the configured confidence threshold.
 
-3. If the script is not available, read `prompts/code-review.md` and manually collect the same context with non-destructive git and `gh` commands.
+3. If the bundled wrapper is not available, read `prompts/code-review.md` and manually collect the same context with non-destructive git and `gh` commands.
 
 ## Review Rules
 

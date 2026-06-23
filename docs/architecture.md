@@ -4,9 +4,9 @@ This plugin is built around a simple Codex-oriented flow: collect context with a
 
 ## Invocation Surface
 
-The plugin exposes one Codex skill named `code-review`. When installed and enabled, Codex can show enabled skills in the slash command list, so users can invoke the workflow as `/code-review`.
+The plugin exposes one Codex slash command at `commands/code-review.md` and one Codex skill named `code-review`. When installed and enabled, users can invoke the workflow as `/code-review`.
 
-This intentionally avoids adding a Claude-specific `commands/` contract or an undocumented Codex manifest field. `/code-review` activates the skill, and the skill maps command-style arguments such as `--pr 123 --comment` to the existing `scripts/codex-review` wrapper.
+The slash command activates the same review workflow as the skill and maps command-style arguments such as `--pr 123 --comment` to the existing `scripts/codex-review` wrapper. The plugin keeps `plugin.json` limited to documented manifest fields; `commands/` is a companion surface discovered from the plugin bundle.
 
 ## Context Collection
 
