@@ -1,5 +1,19 @@
 # Workflow
 
+## Codex Slash Workflow
+
+After the plugin is installed and enabled in Codex, invoke the bundled skill from the composer:
+
+```text
+/code-review
+/code-review --diff
+/code-review --base main
+/code-review --pr 123
+/code-review --pr 123 --comment
+```
+
+This is the Codex equivalent of a Claude Code `commands/code-review.md` entry. The slash invocation activates the `code-review` skill, maps the supplied arguments to `scripts/codex-review`, and then follows the generated prompt.
+
 ## Typical Local Workflow
 
 1. Make code changes.

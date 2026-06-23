@@ -27,6 +27,8 @@ Claude Code's plugin model can use Claude-specific agent definitions. This proje
 
 ## Installation
 
+Install and enable the plugin in Codex so the bundled `code-review` skill is available. Enabled skills appear in the Codex slash command list, so the skill can be invoked as `/code-review`.
+
 Run directly from the repository:
 
 ```bash
@@ -48,6 +50,27 @@ To install somewhere else:
 The installer symlinks by default, falls back to copying if symlinks are unavailable, and refuses to replace an existing command unless `--force` is provided.
 
 ## Usage
+
+### Codex Slash Command
+
+After the plugin is installed and enabled, start a new Codex thread and type `/code-review`.
+
+The slash invocation mirrors Anthropic Claude Code's `commands/code-review.md` style, but uses Codex's supported skill model:
+
+```text
+/code-review
+/code-review --diff
+/code-review --base main
+/code-review --pr 123
+/code-review --pr 123 --comment
+/code-review --threshold 90
+```
+
+The skill instructions tell Codex to translate those arguments to the same `scripts/codex-review` flags, run the wrapper, then follow the generated review prompt. If no target is provided, the wrapper auto-detects a local diff or current branch PR when possible.
+
+You can also explicitly mention the skill as `$code-review` if you prefer Codex's skill mention syntax.
+
+### Shell Wrapper
 
 Review the current staged and unstaged diff:
 

@@ -25,9 +25,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Review my current diff with high signal.",
-      "Review PR #123 and report only real issues.",
-      "Prepare a GitHub-ready code review comment."
+      "Use /code-review to review the current diff with high signal.",
+      "Use /code-review --pr 123 to review a pull request.",
+      "Use /code-review --pr 123 --comment to prepare a GitHub-ready code review comment."
     ],
     "brandColor": "#2563EB"
   }

@@ -2,6 +2,12 @@
 
 This plugin is built around a simple Codex-oriented flow: collect context with a shell wrapper, review with Markdown prompts, validate candidates, score confidence, and report only high-signal findings.
 
+## Invocation Surface
+
+The plugin exposes one Codex skill named `code-review`. When installed and enabled, Codex can show enabled skills in the slash command list, so users can invoke the workflow as `/code-review`.
+
+This intentionally avoids adding a Claude-specific `commands/` contract or an undocumented Codex manifest field. `/code-review` activates the skill, and the skill maps command-style arguments such as `--pr 123 --comment` to the existing `scripts/codex-review` wrapper.
+
 ## Context Collection
 
 `scripts/codex-review` collects:

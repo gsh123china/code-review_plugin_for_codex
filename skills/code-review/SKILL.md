@@ -1,11 +1,28 @@
 ---
 name: code-review
-description: Review the current git diff, a branch diff, or a GitHub pull request with a generic high-signal Codex workflow. Use when the user asks for code review, PR review, regression review, security review, guideline review, or GitHub-ready review comments.
+description: Review the current git diff, a branch diff, or a GitHub pull request with a high-signal Codex workflow. Supports /code-review-style options including --diff, --base, --pr, --comment, and --threshold.
 ---
 
 # Codex Code Review
 
 Use this skill to review only the current change. The review must focus on actionable issues that are introduced by the diff and supported by exact code evidence.
+
+## Slash Command Invocation
+
+When this plugin is installed and enabled, the `code-review` skill can be invoked from Codex's slash command list as:
+
+```text
+/code-review
+/code-review --diff
+/code-review --base main
+/code-review --pr 123
+/code-review --pr 123 --comment
+/code-review --threshold 90
+```
+
+Treat arguments after `/code-review` as review target options and translate them to the same `scripts/codex-review` flags. This mirrors the Claude Code `commands/code-review.md` style while using Codex's supported skill invocation model.
+
+If no explicit target is provided, run `scripts/codex-review` and let the wrapper detect the local diff or current branch PR.
 
 ## Preferred Workflow
 

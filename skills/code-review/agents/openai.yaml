@@ -1,0 +1,8 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review local diffs, branch diffs, and GitHub pull requests with a high-signal workflow."
+  brand_color: "#2563EB"
+  default_prompt: "Review the current change with the code-review workflow. Map supplied options such as --pr <number> or --comment to scripts/codex-review."
+
+policy:
+  allow_implicit_invocation: true
