@@ -1,0 +1,569 @@
+#!/usr/bin/env sh
+set -eu
+
+PLUGIN_NAME="codex-code-review-plugin"
+REVIEW_MARKER="<!-- codex-code-review-plugin -->"
+
+usage() {
+  cat <<'EOF'
+Usage: codex-review [options]
+
+Collect git or GitHub pull request context and print a complete Codex code
+review prompt.
+
+Options:
+  --help              Show this help text.
+  --comment           Ask Codex to post a GitHub review comment when safe.
+  --base <branch>     Review HEAD against the given base branch.
+  --pr <number>       Review a GitHub pull request using gh.
+  --threshold <0-100> Override confidence threshold.
+  --diff              Review the current working tree diff.
+
+Environment:
+  CODEX_REVIEW_HOME                  Override plugin root.
+  CODEX_REVIEW_MAX_DIFF_LINES        Limit rendered diff lines. Default: 4000.
+  CODEX_REVIEW_MAX_INSTRUCTION_LINES Limit rendered instruction lines per file. Default: 800.
+  CODEX_REVIEW_ALLOW_RERUN           Set to 1 to ignore prior plugin comments.
+  CODEX_REVIEW_SKIP_TRIVIAL_AUTOMATION
+                                     Set to 0 to review trivial bot PRs.
+
+Examples:
+  codex-review
+  codex-review --diff
+  codex-review --base main
+  codex-review --pr 123
+  codex-review --pr 123 --comment
+EOF
+}
+
+die() {
+  printf '%s\n' "codex-review: $*" >&2
+  exit 1
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+resolve_script_dir() {
+  target=$0
+  case "$target" in
+    */*) ;;
+    *)
+      found=$(command -v "$target" 2>/dev/null || true)
+      if [ -n "$found" ]; then
+        target=$found
+      fi
+      ;;
+  esac
+
+  while [ -L "$target" ] && command_exists readlink; do
+    link=$(readlink "$target") || break
+    case "$link" in
+      /*) target=$link ;;
+      *) target=$(dirname "$target")/$link ;;
+    esac
+  done
+
+  dir=$(dirname "$target")
+  (CDPATH='' cd "$dir" 2>/dev/null && pwd -P) || printf '.\n'
+}
+
+read_default_threshold() {
+  value=""
+  if [ -f "$CONFIG_PATH" ]; then
+    value=$(awk -F: '
+      /^[[:space:]]*confidence_threshold[[:space:]]*:/ {
+        gsub(/[[:space:]]/, "", $2)
+        print $2
+        exit
+      }
+    ' "$CONFIG_PATH" 2>/dev/null || true)
+  fi
+  if [ -z "$value" ]; then
+    value=80
+  fi
+  printf '%s\n' "$value"
+}
+
+read_instruction_files() {
+  value=""
+  if [ -f "$CONFIG_PATH" ]; then
+    value=$(awk '
+      /^[[:space:]]*instruction_files[[:space:]]*:/ {
+        in_list = 1
+        next
+      }
+      in_list && /^[^[:space:]][^:]*:/ {
+        exit
+      }
+      in_list && /^[[:space:]]*-[[:space:]]*/ {
+        sub(/^[[:space:]]*-[[:space:]]*/, "")
+        gsub(/^["'\''"]|["'\''"]$/, "")
+        print
+      }
+    ' "$CONFIG_PATH" 2>/dev/null || true)
+  fi
+
+  if [ -z "$value" ]; then
+    cat <<'EOF'
+CLAUDE.md
+AGENTS.md
+CODE_REVIEW.md
+CONTRIBUTING.md
+.github/pull_request_template.md
+.github/copilot-instructions.md
+EOF
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
+validate_threshold() {
+  case "$1" in
+    ''|*[!0-9]*) die "--threshold must be an integer from 0 to 100." ;;
+  esac
+  if [ "$1" -lt 0 ] || [ "$1" -gt 100 ]; then
+    die "--threshold must be an integer from 0 to 100."
+  fi
+}
+
+skip_review() {
+  cat <<EOF
+## Code review
+
+Skipped: $1
+EOF
+  exit 0
+}
+
+has_local_diff() {
+  if [ -n "$(git diff --name-only --no-ext-diff 2>/dev/null)" ]; then
+    return 0
+  fi
+  if [ -n "$(git diff --cached --name-only --no-ext-diff 2>/dev/null)" ]; then
+    return 0
+  fi
+  return 1
+}
+
+detect_current_pr() {
+  if [ "$GH_AUTHENTICATED" != "true" ]; then
+    return 1
+  fi
+  gh pr view --json number --jq '.number' 2>/dev/null || return 1
+}
+
+gh_pr_value() {
+  pr=$1
+  json=$2
+  jq_expr=$3
+  gh pr view "$pr" --json "$json" --jq "$jq_expr" 2>/dev/null || true
+}
+
+is_trivial_automation() {
+  author=$1
+  title=$2
+
+  if [ "${CODEX_REVIEW_SKIP_TRIVIAL_AUTOMATION:-1}" = "0" ]; then
+    return 1
+  fi
+
+  lower_author=$(printf '%s' "$author" | tr '[:upper:]' '[:lower:]')
+  lower_title=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')
+
+  case "$lower_author" in
+    *dependabot*|*renovate*|*github-actions*|*bot*) ;;
+    *) return 1 ;;
+  esac
+
+  printf '%s\n' "$lower_title" | grep -Eq '^(bump|update|chore\(deps\)|deps:|dependency|renovate)'
+}
+
+collect_local_diff() {
+  REVIEW_MODE="local_diff"
+  {
+    git diff --cached --name-only --no-ext-diff
+    git diff --name-only --no-ext-diff
+  } | awk 'NF' | sort -u > "$CHANGED_FILES_FILE"
+
+  if [ ! -s "$CHANGED_FILES_FILE" ]; then
+    untracked=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+    if [ -n "$untracked" ]; then
+      skip_review "Only untracked files were found. Stage them or include them in a git diff before review."
+    fi
+    skip_review "No staged or unstaged git diff found."
+  fi
+
+  {
+    printf '## Staged changes\n\n'
+    git diff --cached --patch --no-ext-diff
+    printf '\n## Unstaged changes\n\n'
+    git diff --patch --no-ext-diff
+  } > "$DIFF_FILE"
+
+  {
+    printf 'No GitHub PR context available.\n'
+    printf 'Review target: current staged and unstaged git diff.\n'
+    untracked=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+    if [ -n "$untracked" ]; then
+      printf '\nUntracked files were not included in the diff:\n'
+      printf '%s\n' "$untracked"
+    fi
+  } > "$PR_CONTEXT_FILE"
+}
+
+collect_branch_diff() {
+  REVIEW_MODE="branch_diff"
+  git rev-parse --verify "$BASE_BRANCH^{commit}" >/dev/null 2>&1 ||
+    die "Base branch '$BASE_BRANCH' was not found locally."
+
+  git diff --name-only --no-ext-diff "$BASE_BRANCH"...HEAD | awk 'NF' | sort -u > "$CHANGED_FILES_FILE"
+  if [ ! -s "$CHANGED_FILES_FILE" ]; then
+    skip_review "No changes found between '$BASE_BRANCH' and HEAD."
+  fi
+
+  git diff --patch --no-ext-diff "$BASE_BRANCH"...HEAD > "$DIFF_FILE"
+
+  {
+    printf 'No GitHub PR context available.\n'
+    printf 'Review target: branch diff.\n'
+    printf 'Base branch: %s\n' "$BASE_BRANCH"
+    printf 'Head revision: %s\n' "$(git rev-parse --short HEAD 2>/dev/null || printf 'HEAD')"
+  } > "$PR_CONTEXT_FILE"
+}
+
+collect_pr_diff() {
+  REVIEW_MODE="github_pr"
+
+  if [ "$GH_AVAILABLE" != "true" ]; then
+    die "gh CLI is required for --pr review but was not found."
+  fi
+  if [ "$GH_AUTHENTICATED" != "true" ]; then
+    die "gh CLI is required for --pr review but is not authenticated."
+  fi
+
+  PR_STATE=$(gh_pr_value "$PR_NUMBER" state '.state')
+  PR_DRAFT=$(gh_pr_value "$PR_NUMBER" isDraft '.isDraft')
+  PR_TITLE=$(gh_pr_value "$PR_NUMBER" title '.title')
+  PR_BODY=$(gh_pr_value "$PR_NUMBER" body '.body')
+  PR_AUTHOR=$(gh_pr_value "$PR_NUMBER" author '.author.login')
+  PR_HEAD=$(gh_pr_value "$PR_NUMBER" headRefName '.headRefName')
+  PR_BASE=$(gh_pr_value "$PR_NUMBER" baseRefName '.baseRefName')
+  PR_URL=$(gh_pr_value "$PR_NUMBER" url '.url')
+
+  if [ -z "$PR_STATE" ]; then
+    die "Could not read PR #$PR_NUMBER with gh."
+  fi
+  if [ "$PR_STATE" != "OPEN" ]; then
+    skip_review "PR #$PR_NUMBER is not open (state: $PR_STATE)."
+  fi
+  if [ "$PR_DRAFT" = "true" ]; then
+    skip_review "PR #$PR_NUMBER is a draft."
+  fi
+
+  if [ "${CODEX_REVIEW_ALLOW_RERUN:-0}" != "1" ]; then
+    if {
+      gh pr view "$PR_NUMBER" --json comments --jq '.comments[].body' 2>/dev/null
+      gh pr view "$PR_NUMBER" --json reviews --jq '.reviews[].body' 2>/dev/null
+    } | grep -F "$REVIEW_MARKER" >/dev/null 2>&1; then
+      skip_review "PR #$PR_NUMBER already has a $PLUGIN_NAME review comment."
+    fi
+  fi
+
+  if is_trivial_automation "$PR_AUTHOR" "$PR_TITLE"; then
+    skip_review "PR #$PR_NUMBER appears to be a trivial automated dependency or maintenance update."
+  fi
+
+  gh pr view "$PR_NUMBER" --json files --jq '.files[].path' 2>/dev/null | awk 'NF' | sort -u > "$CHANGED_FILES_FILE"
+  if [ ! -s "$CHANGED_FILES_FILE" ]; then
+    skip_review "PR #$PR_NUMBER has no changed files."
+  fi
+
+  gh pr diff "$PR_NUMBER" --patch > "$DIFF_FILE" 2>/dev/null ||
+    die "Could not collect PR #$PR_NUMBER diff with gh."
+
+  {
+    printf 'PR number: #%s\n' "$PR_NUMBER"
+    printf 'URL: %s\n' "$PR_URL"
+    printf 'State: %s\n' "$PR_STATE"
+    printf 'Draft: %s\n' "$PR_DRAFT"
+    printf 'Author: %s\n' "$PR_AUTHOR"
+    printf 'Head branch: %s\n' "$PR_HEAD"
+    printf 'Base branch: %s\n' "$PR_BASE"
+    printf 'Title: %s\n' "$PR_TITLE"
+    printf '\nDescription:\n%s\n' "$PR_BODY"
+  } > "$PR_CONTEXT_FILE"
+}
+
+add_instruction_candidate() {
+  candidate=$1
+  case "$candidate" in
+    ./*) candidate=${candidate#./} ;;
+  esac
+  if [ -f "$candidate" ]; then
+    printf '%s\n' "$candidate" >> "$INSTRUCTION_PATHS_FILE"
+  fi
+}
+
+collect_instruction_paths() {
+  : > "$INSTRUCTION_PATHS_FILE"
+
+  while IFS= read -r changed_file; do
+    [ -n "$changed_file" ] || continue
+    case "$changed_file" in
+      /*) continue ;;
+    esac
+
+    dir=$(dirname "$changed_file")
+    while :; do
+      for name in $INSTRUCTION_FILES; do
+        case "$name" in
+          */*) continue ;;
+        esac
+        if [ "$dir" = "." ]; then
+          add_instruction_candidate "$name"
+        else
+          add_instruction_candidate "$dir/$name"
+        fi
+      done
+
+      if [ "$dir" = "." ]; then
+        break
+      fi
+      parent=$(dirname "$dir")
+      if [ "$parent" = "$dir" ]; then
+        break
+      fi
+      dir=$parent
+    done
+  done < "$CHANGED_FILES_FILE"
+
+  for name in $INSTRUCTION_FILES; do
+    case "$name" in
+      */*) add_instruction_candidate "$name" ;;
+    esac
+  done
+
+  if [ -s "$INSTRUCTION_PATHS_FILE" ]; then
+    sort -u "$INSTRUCTION_PATHS_FILE" > "$INSTRUCTION_PATHS_FILE.sorted"
+    mv "$INSTRUCTION_PATHS_FILE.sorted" "$INSTRUCTION_PATHS_FILE"
+  fi
+}
+
+render_limited_file() {
+  file=$1
+  max_lines=$2
+  line_count=$(wc -l < "$file" | tr -d ' ')
+
+  if [ "$line_count" -gt "$max_lines" ]; then
+    sed -n "1,${max_lines}p" "$file"
+    printf '\n[truncated: %s total lines, first %s lines shown]\n' "$line_count" "$max_lines"
+  else
+    cat "$file"
+  fi
+}
+
+render_changed_files() {
+  if [ ! -s "$CHANGED_FILES_FILE" ]; then
+    printf 'No changed files collected.\n'
+    return
+  fi
+  sed 's/^/- /' "$CHANGED_FILES_FILE"
+}
+
+render_repository_instructions() {
+  if [ ! -s "$INSTRUCTION_PATHS_FILE" ]; then
+    printf 'No repository instruction files found for the changed paths.\n'
+    return
+  fi
+
+  while IFS= read -r instruction_file; do
+    [ -n "$instruction_file" ] || continue
+    printf '\n#### %s\n\n' "$instruction_file"
+    render_limited_file "$instruction_file" "$MAX_INSTRUCTION_LINES"
+    printf '\n'
+  done < "$INSTRUCTION_PATHS_FILE"
+}
+
+render_diff() {
+  if [ ! -s "$DIFF_FILE" ]; then
+    printf 'No diff content collected.\n'
+    return
+  fi
+  render_limited_file "$DIFF_FILE" "$MAX_DIFF_LINES"
+}
+
+render_prompt() {
+  render_changed_files > "$CHANGED_FILES_RENDERED"
+  render_repository_instructions > "$INSTRUCTIONS_RENDERED"
+  render_diff > "$DIFF_RENDERED"
+
+  if [ "$COMMENT_REQUESTED" = "true" ] && [ "$REVIEW_MODE" = "github_pr" ] && [ "$GH_AUTHENTICATED" = "true" ]; then
+    COMMENT_TARGET_AVAILABLE="true"
+  else
+    COMMENT_TARGET_AVAILABLE="false"
+  fi
+
+  awk \
+    -v review_mode="$REVIEW_MODE" \
+    -v comment_mode="$COMMENT_REQUESTED" \
+    -v comment_target_available="$COMMENT_TARGET_AVAILABLE" \
+    -v confidence_threshold="$CONFIDENCE_THRESHOLD" \
+    -v pr_context_file="$PR_CONTEXT_FILE" \
+    -v changed_files_file="$CHANGED_FILES_RENDERED" \
+    -v instructions_file="$INSTRUCTIONS_RENDERED" \
+    -v diff_file="$DIFF_RENDERED" '
+    function include_file(path, line) {
+      while ((getline line < path) > 0) {
+        print line
+      }
+      close(path)
+    }
+    {
+      gsub(/\{\{REVIEW_MODE\}\}/, review_mode)
+      gsub(/\{\{COMMENT_MODE\}\}/, comment_mode)
+      gsub(/\{\{COMMENT_TARGET_AVAILABLE\}\}/, comment_target_available)
+      gsub(/\{\{CONFIDENCE_THRESHOLD\}\}/, confidence_threshold)
+
+      if ($0 ~ /\{\{PR_CONTEXT\}\}/) {
+        include_file(pr_context_file)
+        next
+      }
+      if ($0 ~ /\{\{CHANGED_FILES\}\}/) {
+        include_file(changed_files_file)
+        next
+      }
+      if ($0 ~ /\{\{REPOSITORY_INSTRUCTIONS\}\}/) {
+        include_file(instructions_file)
+        next
+      }
+      if ($0 ~ /\{\{DIFF\}\}/) {
+        include_file(diff_file)
+        next
+      }
+      print
+    }
+  ' "$PROMPT_TEMPLATE"
+}
+
+SCRIPT_DIR=$(resolve_script_dir)
+PLUGIN_ROOT=${CODEX_REVIEW_HOME:-$(CDPATH='' cd "$SCRIPT_DIR/.." 2>/dev/null && pwd -P)}
+CONFIG_PATH="$PLUGIN_ROOT/config/default-review.yml"
+PROMPT_TEMPLATE="$PLUGIN_ROOT/prompts/code-review.md"
+
+[ -f "$PROMPT_TEMPLATE" ] || die "Prompt template not found at $PROMPT_TEMPLATE."
+
+DEFAULT_THRESHOLD=$(read_default_threshold)
+INSTRUCTION_FILES=$(read_instruction_files)
+CONFIDENCE_THRESHOLD=$DEFAULT_THRESHOLD
+COMMENT_REQUESTED=false
+BASE_BRANCH=""
+PR_NUMBER=""
+FORCE_DIFF=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --comment)
+      COMMENT_REQUESTED=true
+      ;;
+    --base)
+      shift
+      [ "$#" -gt 0 ] || die "--base requires a branch name."
+      BASE_BRANCH=$1
+      ;;
+    --pr)
+      shift
+      [ "$#" -gt 0 ] || die "--pr requires a pull request number."
+      PR_NUMBER=$1
+      ;;
+    --threshold)
+      shift
+      [ "$#" -gt 0 ] || die "--threshold requires a value."
+      CONFIDENCE_THRESHOLD=$1
+      ;;
+    --diff)
+      FORCE_DIFF=true
+      ;;
+    *)
+      die "Unknown option: $1"
+      ;;
+  esac
+  shift
+done
+
+validate_threshold "$CONFIDENCE_THRESHOLD"
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+  die "This command must be run inside a git repository."
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) ||
+  die "Could not determine git repository root."
+cd "$REPO_ROOT" || die "Could not enter repository root: $REPO_ROOT"
+
+GH_AVAILABLE=false
+GH_AUTHENTICATED=false
+if command_exists gh; then
+  GH_AVAILABLE=true
+  if gh auth status >/dev/null 2>&1; then
+    GH_AUTHENTICATED=true
+  fi
+fi
+
+TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/codex-review.XXXXXX") ||
+  die "Could not create a temporary directory."
+trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
+
+CHANGED_FILES_FILE="$TMP_DIR/changed-files.txt"
+DIFF_FILE="$TMP_DIR/diff.patch"
+PR_CONTEXT_FILE="$TMP_DIR/pr-context.txt"
+INSTRUCTION_PATHS_FILE="$TMP_DIR/instruction-paths.txt"
+CHANGED_FILES_RENDERED="$TMP_DIR/changed-files-rendered.txt"
+INSTRUCTIONS_RENDERED="$TMP_DIR/instructions-rendered.txt"
+DIFF_RENDERED="$TMP_DIR/diff-rendered.patch"
+
+MAX_DIFF_LINES=${CODEX_REVIEW_MAX_DIFF_LINES:-4000}
+MAX_INSTRUCTION_LINES=${CODEX_REVIEW_MAX_INSTRUCTION_LINES:-800}
+
+case "$MAX_DIFF_LINES" in ''|*[!0-9]*) MAX_DIFF_LINES=4000 ;; esac
+case "$MAX_INSTRUCTION_LINES" in ''|*[!0-9]*) MAX_INSTRUCTION_LINES=800 ;; esac
+if [ "$MAX_DIFF_LINES" -lt 1 ]; then
+  MAX_DIFF_LINES=4000
+fi
+if [ "$MAX_INSTRUCTION_LINES" -lt 1 ]; then
+  MAX_INSTRUCTION_LINES=800
+fi
+
+: > "$CHANGED_FILES_FILE"
+: > "$DIFF_FILE"
+: > "$PR_CONTEXT_FILE"
+: > "$INSTRUCTION_PATHS_FILE"
+
+if [ -n "$PR_NUMBER" ]; then
+  collect_pr_diff
+elif [ "$FORCE_DIFF" = "true" ]; then
+  collect_local_diff
+elif [ -n "$BASE_BRANCH" ]; then
+  collect_branch_diff
+elif has_local_diff; then
+  collect_local_diff
+else
+  detected_pr=""
+  if detected_pr=$(detect_current_pr); then
+    if [ -n "$detected_pr" ]; then
+      PR_NUMBER=$detected_pr
+      collect_pr_diff
+    else
+      skip_review "No local diff found and no current branch PR was detected."
+    fi
+  else
+    skip_review "No local diff found and no current branch PR was detected."
+  fi
+fi
+
+collect_instruction_paths
+render_prompt

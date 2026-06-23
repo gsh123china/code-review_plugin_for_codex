@@ -1,0 +1,34 @@
+{
+  "name": "codex-code-review-plugin",
+  "version": "0.1.0",
+  "description": "Generic Codex-oriented code review prompts and command wrappers for high-signal pull request and diff review.",
+  "author": {
+    "name": "gsh"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "code-review",
+    "pull-request",
+    "diff-review",
+    "developer-productivity"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Code Review",
+    "shortDescription": "High-signal review prompts for diffs and pull requests.",
+    "longDescription": "A generic Codex workflow for collecting repository context, simulating independent reviewer passes, validating candidate findings, scoring confidence, and reporting only actionable issues introduced by the current change.",
+    "developerName": "gsh",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Review my current diff with high signal.",
+      "Review PR #123 and report only real issues.",
+      "Prepare a GitHub-ready code review comment."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
