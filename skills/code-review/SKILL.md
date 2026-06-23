@@ -1,30 +1,30 @@
 ---
 name: code-review
-description: Review the current git diff, a branch diff, or a GitHub pull request with a high-signal Codex workflow. Supports /code-review-style options including --diff, --base, --pr, --comment, and --threshold.
+description: Review the current git diff, a branch diff, or a GitHub pull request with a high-signal Codex workflow. Supports options including --diff, --base, --pr, --comment, and --threshold.
 ---
 
 # Codex Code Review
 
 Use this skill to review only the current change. The review must focus on actionable issues that are introduced by the diff and supported by exact code evidence.
 
-## Slash Command Invocation
+## Invocation
 
-This plugin ships a Codex slash command at `commands/code-review.md`. When the plugin is installed and enabled, invoke the command as:
+Prefer invoking this installed plugin skill explicitly:
 
 ```text
-/code-review
-/code-review --diff
-/code-review --base main
-/code-review --pr 123
-/code-review --pr 123 --comment
-/code-review --threshold 90
+Use $codex-code-review-plugin:code-review to review the current diff.
+Use $codex-code-review-plugin:code-review with --diff.
+Use $codex-code-review-plugin:code-review with --base main.
+Use $codex-code-review-plugin:code-review with --pr 123.
+Use $codex-code-review-plugin:code-review with --pr 123 --comment.
+Use $codex-code-review-plugin:code-review with --threshold 90.
 ```
 
-The slash command uses this skill as the authoritative workflow. Treat arguments after `/code-review` as review target options and translate them to the same `scripts/codex-review` flags.
+Treat supplied option tokens such as `--pr 123 --comment` as review target options and translate them to the same `scripts/codex-review` flags.
 
 If no explicit target is provided, run `scripts/codex-review` and let the wrapper detect the local diff or current branch PR.
 
-If the slash command is not available in the current Codex surface, explicitly mention this skill as `$code-review`.
+This plugin also includes `commands/code-review.md` as an experimental command template for Codex surfaces that explicitly load plugin commands. Do not rely on a bare `/code-review` command in current stable Codex CLI versions. If a slash-style shortcut is required, install the optional custom prompt shim and invoke `/prompts:code-review`.
 
 ## Preferred Workflow
 

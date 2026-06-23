@@ -1,18 +1,34 @@
 # Workflow
 
-## Codex Slash Workflow
+## Codex Skill Workflow
 
-After the plugin is installed and enabled in Codex, invoke the bundled slash command from the composer:
+After the plugin is installed and enabled in Codex, invoke the bundled skill explicitly:
 
 ```text
-/code-review
-/code-review --diff
-/code-review --base main
-/code-review --pr 123
-/code-review --pr 123 --comment
+Use $codex-code-review-plugin:code-review to review the current diff.
+Use $codex-code-review-plugin:code-review with --diff.
+Use $codex-code-review-plugin:code-review with --base main.
+Use $codex-code-review-plugin:code-review with --pr 123.
+Use $codex-code-review-plugin:code-review with --pr 123 --comment.
 ```
 
-The slash invocation is provided by `commands/code-review.md`. It uses the `code-review` skill as the authoritative workflow, maps the supplied arguments to `scripts/codex-review`, and then follows the generated prompt.
+The skill maps the supplied arguments to `scripts/codex-review`, runs the bundled wrapper, and then follows the generated prompt.
+
+## Optional Custom Prompt Shim
+
+If the optional local custom prompt shim has been installed, invoke it as:
+
+```text
+/prompts:code-review
+/prompts:code-review --diff
+/prompts:code-review --base main
+/prompts:code-review --pr 123
+/prompts:code-review --pr 123 --comment
+```
+
+This shim comes from `prompts/custom-prompts/code-review.md`. It is not installed automatically by the plugin, and it does not provide a bare `/code-review` alias.
+
+`commands/code-review.md` is retained as an experimental command template for Codex surfaces that explicitly support plugin commands. Do not use bare `/code-review` as the acceptance check for current stable Codex CLI installs.
 
 ## Typical Local Workflow
 

@@ -4,9 +4,11 @@ This plugin is built around a simple Codex-oriented flow: collect context with a
 
 ## Invocation Surface
 
-The plugin exposes one Codex slash command at `commands/code-review.md` and one Codex skill named `code-review`. When installed and enabled, users can invoke the workflow as `/code-review`.
+The plugin exposes one Codex skill named `code-review`. When installed and enabled, users should invoke the workflow explicitly as `$codex-code-review-plugin:code-review`.
 
-The slash command activates the same review workflow as the skill and maps command-style arguments such as `--pr 123 --comment` to the existing `scripts/codex-review` wrapper. The plugin keeps `plugin.json` limited to documented manifest fields; `commands/` is a companion surface discovered from the plugin bundle.
+The skill maps command-style arguments such as `--pr 123 --comment` to the existing `scripts/codex-review` wrapper. The plugin keeps `plugin.json` limited to documented manifest fields. `commands/code-review.md` is retained only as an experimental command template for Codex surfaces that explicitly load plugin commands; current stable Codex CLI versions should not be expected to expose a bare `/code-review` alias from that file.
+
+For users who need slash-style local invocation, the repository provides an optional deprecated custom prompt shim at `prompts/custom-prompts/code-review.md`. When explicitly copied to the Codex prompts directory, it is invoked as `/prompts:code-review`.
 
 ## Context Collection
 

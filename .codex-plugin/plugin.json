@@ -1,6 +1,6 @@
 {
   "name": "codex-code-review-plugin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Generic Codex-oriented code review prompts and command wrappers for high-signal pull request and diff review.",
   "author": {
     "name": "gsh"
@@ -25,9 +25,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use /code-review to review the current diff with high signal.",
-      "Use /code-review --pr 123 to review a pull request.",
-      "Use /code-review --pr 123 --comment to prepare a GitHub-ready code review comment."
+      "Use $codex-code-review-plugin:code-review to review the current diff with high signal.",
+      "Use $codex-code-review-plugin:code-review with --pr 123 to review a pull request.",
+      "Install the optional /prompts:code-review shim if you want a local slash-style shortcut."
     ],
     "brandColor": "#2563EB"
   }

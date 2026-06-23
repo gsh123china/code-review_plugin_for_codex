@@ -9,8 +9,9 @@ The project is conceptually inspired by Anthropic Claude Code's official code-re
 ## What It Provides
 
 - A Codex plugin manifest at `.codex-plugin/plugin.json`.
-- A Codex slash command at `commands/code-review.md` for `/code-review`.
-- A reusable Codex skill at `skills/code-review/SKILL.md`.
+- A reusable Codex skill at `skills/code-review/SKILL.md`, preferably invoked as `$codex-code-review-plugin:code-review`.
+- An experimental command template at `commands/code-review.md` for Codex surfaces that explicitly load plugin commands; bare `/code-review` is not a current stable guarantee.
+- An optional custom prompt shim at `prompts/custom-prompts/code-review.md` for `/prompts:code-review`.
 - A self-contained review prompt at `prompts/code-review.md`.
 - Independent reviewer prompt files for guideline, bug, security, history, regression, minimality, and confidence scoring passes.
 - A portable shell wrapper at `scripts/codex-review` that gathers repository context and prints a ready-to-use Codex prompt.
@@ -29,7 +30,7 @@ Claude Code's plugin model can use Claude-specific agent definitions. This proje
 
 ## Installation
 
-Install and enable the plugin in Codex so the bundled `/code-review` slash command and `code-review` skill are available.
+Install and enable the plugin in Codex so the bundled `code-review` skill is available. In current Codex CLI versions, plugin `commands/` files are not a stable source for a bare `/code-review` command, so do not use `/code-review` as the installation acceptance check.
 
 ### Install The Codex Plugin
 
@@ -55,9 +56,9 @@ codex plugin add codex-code-review-plugin@gsh-code-review
 
 You can also open the plugin browser with `/plugins`, choose the **GSH Code Review** marketplace, and install **Codex Code Review** from there.
 
-### Optional Shell Command
+### Optional Shell Command And Prompt Shim
 
-The Codex plugin installation makes `/code-review` and the `code-review` skill available in Codex. If you also want a `codex-review` shell command on `PATH`, install the wrapper separately from a cloned checkout:
+The Codex plugin installation makes the `code-review` skill available in Codex. If you also want a `codex-review` shell command on `PATH`, install the wrapper separately from a cloned checkout:
 
 ```bash
 ./scripts/codex-review --help
@@ -71,6 +72,14 @@ To install the wrapper somewhere else:
 ```
 
 The installer symlinks by default, falls back to copying if symlinks are unavailable, and refuses to replace an existing command unless `--force` is provided.
+
+If you want a local slash-style shortcut, explicitly install the deprecated Codex custom prompt shim:
+
+```bash
+./scripts/install.sh --prompt-shim --no-command
+```
+
+The shim is copied to `${CODEX_HOME:-$HOME/.codex}/prompts/code-review.md`. After restarting Codex, invoke it as `/prompts:code-review`, not `/code-review`. Existing prompt files are not overwritten unless you pass `--force`.
 
 ## Updating
 
@@ -114,24 +123,39 @@ rm -f "$HOME/.local/bin/codex-review"
 
 ## Usage
 
-### Codex Slash Command
+### Codex Skill (Recommended)
 
-After the plugin is installed and enabled, start a new Codex thread and type `/code-review`.
-
-The slash invocation is provided by this plugin's `commands/code-review.md` file:
+After the plugin is installed and enabled, start a new Codex thread and explicitly mention the skill:
 
 ```text
-/code-review
-/code-review --diff
-/code-review --base main
-/code-review --pr 123
-/code-review --pr 123 --comment
-/code-review --threshold 90
+Use $codex-code-review-plugin:code-review to review the current diff.
+Use $codex-code-review-plugin:code-review with --diff.
+Use $codex-code-review-plugin:code-review with --base main.
+Use $codex-code-review-plugin:code-review with --pr 123.
+Use $codex-code-review-plugin:code-review with --pr 123 --comment.
+Use $codex-code-review-plugin:code-review with --threshold 90.
 ```
 
-The command tells Codex to translate those arguments to the same `scripts/codex-review` flags, run the bundled wrapper, then follow the generated review prompt. If no target is provided, the wrapper auto-detects a local diff or current branch PR when possible.
+The skill tells Codex to translate those arguments to the same `scripts/codex-review` flags, run the bundled wrapper, then follow the generated review prompt. If no target is provided, the wrapper auto-detects a local diff or current branch PR when possible.
 
-You can also explicitly mention the skill as `$code-review` if you prefer Codex's skill mention syntax or the current Codex surface does not show slash commands.
+### Optional Custom Prompt Shim
+
+If you explicitly installed the custom prompt shim, you can use:
+
+```text
+/prompts:code-review
+/prompts:code-review --diff
+/prompts:code-review --base main
+/prompts:code-review --pr 123
+/prompts:code-review --pr 123 --comment
+/prompts:code-review --threshold 90
+```
+
+Codex custom prompts are local and deprecated. This shim is a compatibility entry point for machines that need slash-style invocation; it is not installed or shared automatically by the plugin.
+
+### Experimental Command Template
+
+The repository still includes `commands/code-review.md` for future Codex surfaces that explicitly support plugin command templates. The current stable entry points are `$codex-code-review-plugin:code-review`, the `codex-review` shell wrapper, or `/prompts:code-review` after explicit shim installation.
 
 ### Shell Wrapper
 

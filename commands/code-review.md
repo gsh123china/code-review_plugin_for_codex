@@ -3,9 +3,11 @@ description: Review the current git diff, a branch diff, or a GitHub pull reques
 argument-hint: "[--diff] [--base <branch>] [--pr <number>] [--comment] [--threshold <0-100>]"
 ---
 
-# /code-review
+# Experimental code-review command template
 
-Run a high-signal code review for the current change.
+Run a high-signal code review for the current change when the current Codex surface explicitly loads plugin command templates.
+
+This file is packaged for forward compatibility. Current stable Codex CLI versions do not reliably expose plugin `commands/` files as a bare `/code-review` command. Prefer the installed skill `$codex-code-review-plugin:code-review`, the `scripts/codex-review` wrapper, or the optional `/prompts:code-review` custom prompt shim.
 
 ## Arguments
 
